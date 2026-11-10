@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mason — Autonomous material handling for construction sites</title>
+  <meta name="description" content="Mason is an autonomous material handling robot for construction sites. Contact sales.">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://api.fontshare.com">
+  <link href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600&display=swap" rel="stylesheet">
+    <style>
+  /* Critical CSS for the loading screen, inline so it paints correctly even before styles.css loads */
+  :root { --ink:#0a0a0a; --mute:#5f5f66; --line:#e4e4e7; --soft:#f4f4f5; --accent:#f2b400; }
+  .preload .glyph { display:inline-block; background: currentColor; aspect-ratio: 388 / 240; -webkit-mask: url(assets/logo.svg) center / contain no-repeat; mask: url(assets/logo.svg) center / contain no-repeat; }
+html.is-loading, html.is-loading body { overflow: hidden; }
+.preload {
+  font: 400 16px/1.5 "General Sans", -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased;
+  position: fixed; inset: 0; z-index: 100; background: #fff; color: var(--ink);
+  display: grid; grid-template-rows: auto 1fr auto; padding: clamp(22px, 4vw, 48px);
+  transition: opacity .7s ease, visibility .7s ease;
+}
+.preload::before { content: ""; position: absolute; inset: 10px; border: 1px solid var(--line); pointer-events: none; }
+.preload.is-done { opacity: 0; visibility: hidden; pointer-events: none; }
+.preload__top { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; letter-spacing: -.01em; }
+.preload__top .glyph { width: 30px; }
+.preload__main { align-self: center; max-width: 980px; width: 100%; margin: 0 auto; padding: 0 clamp(0px, 2vw, 24px); }
+.preload__eyebrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 clamp(20px, 3vh, 32px); padding-bottom: 14px; border-bottom: 1px solid var(--line); font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--mute); }
+.preload__eyebrow b { font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
+.preload__quotes { position: relative; min-height: clamp(150px, 26vh, 240px); }
+.preload__quotes p {
+  position: absolute; inset: 0 auto auto 0; margin: 0; max-width: 22em;
+  font-weight: 500; font-size: clamp(26px, 3.8vw, 50px); line-height: 1.12; letter-spacing: -.035em;
+  opacity: 0; transform: translateY(10px); transition: opacity .7s ease, transform .7s ease; pointer-events: none;
+}
+.preload__quotes p.is-on { opacity: 1; transform: none; pointer-events: auto; }
+.preload__foot { max-width: 980px; width: 100%; margin: 0 auto; padding: 0 clamp(0px, 2vw, 24px); }
+.preload__bar { height: 4px; background: var(--soft); overflow: hidden; }
+.preload__bar i { display: block; height: 100%; background: var(--ink); transform: scaleX(0); transform-origin: left; will-change: transform; position: relative; }
+.preload__bar i::after { content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 28px; background: linear-gradient(90deg, transparent, var(--accent)); }
+.preload__row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 14px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.preload__pct { font-size: clamp(30px, 4vw, 46px); font-weight: 500; letter-spacing: -.03em; text-transform: none; color: var(--ink); font-variant-numeric: tabular-nums; }
+.preload__pct b { font-weight: 500; }
+@media (prefers-reduced-motion: reduce) { .preload, .preload__quotes p { transition: none; } .preload__quotes p { transform: none; } }
+
+  </style>
+  <link rel="stylesheet" href="styles.css?v=5">
+</head>
+<body>
+  <noscript><style>.preload{display:none!important}html.is-loading{overflow:auto!important}</style></noscript>
+  <div class="preload" id="preload" role="status" aria-live="polite" aria-label="Loading Mason">
+    <div class="preload__top"><span class="glyph" aria-hidden="true"></span><span>Mason</span></div>
+    <div class="preload__main">
+      <p class="preload__eyebrow">What we’re learning <span><b id="pl-n">01</b> / 06</span></p>
+      <div class="preload__quotes" id="pl-quotes">
+        <p class="is-on">Existing equipment doesn’t serve every material movement. Mason goes after the ones it doesn’t.</p>
+        <p>Materials can be unloaded, stored, staged and delivered before anyone uses them. Every extra move costs time and labour.</p>
+        <p>Materials can arrive on site while the installation crew still can’t work.</p>
+        <p>The first place a material is put isn’t always where it’s used. It can be moved again, and again.</p>
+        <p>Material handlers often act as human dispatch systems, deciding what goes where, and when.</p>
+        <p>Long or awkward loads can need a second worker to steady them. And on a site, delays are all connected.</p>
+      </div>
+    </div>
+    <div class="preload__foot">
+      <div class="preload__bar"><i id="pl-fill"></i></div>
+      <div class="preload__row"><span>Loading Mason</span><span class="preload__pct"><b id="pl-pct">0</b>%</span></div>
+    </div>
+  </div>
+  <script>
+  /* Loading screen. Progress is real: page, fonts and the hero 3D model each count toward 100%.
+     The model reports through window.masonLoad.set('model', 0..1) from viewer.js. The screen
+     leaves as soon as everything is ready (never sooner than ~1.4 s, so it doesn't flash). */
+  (function () {
+    var root = document.documentElement, el = document.getElementById('preload');
+    var W = { dom: 0.08, fonts: 0.12, load: 0.2, model: 0.6 }, F = { dom: 0, fonts: 0, load: 0, model: 0 };
+    var fill = document.getElementById('pl-fill'), pct = document.getElementById('pl-pct');
+    var quotes = document.querySelectorAll('#pl-quotes p'), nEl = document.getElementById('pl-n');
+    var shown = 0, finished = false, t0 = Date.now(), qi = 0;
+    var hold = /[?&]loader\b/.test(location.search);   // add ?loader to the address to keep this screen up for previewing
+    window.masonLoad = { set: function (k, v) { if (k in F) F[k] = Math.max(F[k], Math.min(1, v)); } };
+    function target() { var t = 0; for (var k in W) t += W[k] * F[k]; return t; }
+    function allDone() { for (var k in F) if (F[k] < 1) return false; return true; }
+    function finish() {
+      if (finished) return; finished = true;
+      el.classList.add('is-done');
+      root.classList.remove('is-loading');
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 900);
+    }
+    function frame() {
+      if (finished) return;
+      var goal = target();
+      var ready = !hold && allDone() && Date.now() - t0 > 1400;
+      if (ready) goal = 1;
+      else goal = Math.min(goal, 0.985);                // never show 100% before it is really ready
+      shown += Math.max((goal - shown) * 0.07, goal > shown ? 0.0008 : 0);
+      if (shown > goal) shown = goal;
+      var p = Math.round(shown * 100);
+      fill.style.transform = 'scaleX(' + shown.toFixed(4) + ')';
+      pct.textContent = p;
+      if (ready && shown >= 0.995) { fill.style.transform = 'scaleX(1)'; pct.textContent = '100'; setTimeout(finish, 280); return; }
+      requestAnimationFrame(frame);
+    }
+    function nextQuote() {
+      quotes[qi].classList.remove('is-on');
+      qi = (qi + 1) % quotes.length;
+      quotes[qi].classList.add('is-on');
+      nEl.textContent = ('0' + (qi + 1)).slice(-2);
+    }
+    setInterval(function () { if (!finished) nextQuote(); }, 4200);
+    root.classList.add('is-loading');
+    document.addEventListener('DOMContentLoaded', function () { window.masonLoad.set('dom', 1); });
+    if (document.readyState !== 'loading') window.masonLoad.set('dom', 1);
+    if (document.fonts && document.fonts.ready) { document.fonts.ready.then(function () { window.masonLoad.set('fonts', 1); }); setTimeout(function () { window.masonLoad.set('fonts', 1); }, 4000); } else window.masonLoad.set('fonts', 1);
+    if (document.readyState === 'complete') window.masonLoad.set('load', 1); else window.addEventListener('load', function () { window.masonLoad.set('load', 1); });
+    if (!hold) setTimeout(function () { for (var k in F) F[k] = 1; }, 20000);   // failsafe on very slow connections
+    requestAnimationFrame(frame);
+  })();
+  </script>
+
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="Mason">
+      <span class="glyph" aria-hidden="true"></span>
+      <span>Mason</span>
+    </a>
+    <nav class="nav__pill" aria-label="Primary">
+      <a href="#inside">What’s inside</a>
+      <i aria-hidden="true"></i>
+      <a href="#vision">Why Mason</a>
+      <i aria-hidden="true"></i>
+      <a href="#on-the-job">See a run</a>
+    </nav>
+    <a class="btn-pill btn-pill--sm" href="#contact">Contact sales <span class="btn-pill__arrow" aria-hidden="true"><svg viewBox="0 0 12 12" width="12" height="12" fill="none"><path d="M3 9 9 3M4.2 3H9v4.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
+  </header>
+
+  <main id="top">
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero__copy">
+        <p class="chip">Currently in <span class="chip__logo" role="img" aria-label="Entrepreneur First"></span></p>
+        <h1>Mason moves materials so workers don’t have to.</h1>
+        <p class="hero__sub">An autonomous robot that carries bricks, blocks and rubble around the job site, so your crew can keep building.</p>
+        <a class="btn-pill" href="#contact">Contact sales <span class="btn-pill__arrow" aria-hidden="true"><svg viewBox="0 0 12 12" width="12" height="12" fill="none"><path d="M3 9 9 3M4.2 3H9v4.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
+        <p class="fine">Mason is in development.</p>
+      </div>
+
+      <div class="hero__stage" id="stage">
+        <canvas id="stage3d" aria-label="3D model of Mason. Drag to rotate."></canvas>
+        <p class="hint" id="hint">Drag to rotate</p>
+      </div>
+    </section>
+
+    <!-- EARLY INTEREST (LOIs, not partners) -->
+    <section class="partners" aria-label="Early interest from">
+      <p class="label">Early interest from</p>
+      <ul class="partners__row">
+        <li><span class="wm wm--a">GJ Gardner</span></li>
+        <li><span class="wm wm--b">PIONEER URBAN</span></li>
+        <li><span class="wm wm--c">Ghuman Realty</span></li>
+        <li><span class="wm wm--d">Silver Creek</span></li>
+      </ul>
+    </section>
+
+    <!-- WHAT'S INSIDE: explodable 3D model -->
+    <section class="block inside" id="inside">
+      <p class="label">Under the hood</p>
+      <h2>What’s inside.</h2>
+      <div class="inside__grid">
+        <div class="inside__stage" id="inside-stage">
+          <div class="inside__bar">
+            <span>Drag to rotate, click a part</span>
+            <button class="btn-line" id="explode-btn" type="button">Disassemble</button>
+          </div>
+          <canvas id="inside3d" aria-label="3D view of Mason taken apart. Drag to rotate, click a part."></canvas>
+          <p class="inside__loading" id="inside-loading">Loading the 3D model</p>
+        </div>
+        <ul class="inside__list" id="parts-list" aria-label="Parts"></ul>
+      </div>
+    </section>
+
+    <!-- BUILT BY: moving carousel of where the team comes from -->
+    <section class="builders" aria-label="Built by engineers from">
+      <p class="label">Built by engineers from</p>
+      <div class="marquee">
+        <div class="marquee__track">
+        <ul class="marquee__list">
+          <li><img src="assets/builders/lt.png" alt="Larsen &amp; Toubro" style="height:36px" loading="lazy"></li>
+          <li><img src="assets/builders/systra.png" alt="Systra" style="height:26px" loading="lazy"></li>
+          <li><img src="assets/builders/crri.png" alt="CSIR-CRRI" style="height:54px" loading="lazy"></li>
+          <li><img src="assets/builders/lam.png" alt="Lam Research" style="height:34px" loading="lazy"></li>
+          <li><img src="assets/builders/jouleless.png" alt="Jouleless" style="height:30px" loading="lazy"></li>
+          <li><img src="assets/builders/ninjacart.png" alt="Ninjacart" style="height:28px" loading="lazy"></li>
+          <li><img src="assets/builders/urbancompany.png" alt="Urban Company" style="height:32px" loading="lazy"></li>
+          <li><img src="assets/builders/capillary.png" alt="Capillary Technologies" style="height:28px" loading="lazy"></li>
+          <li><img src="assets/builders/shaadi.png" alt="Shaadi.com (People Interactive)" style="height:35px" loading="lazy"></li>
+          <li><img src="assets/builders/venturecatalysts.png" alt="Venture Catalysts" style="height:24px" loading="lazy"></li>
+          <li><img src="assets/builders/bits.png" alt="BITS Pilani" style="height:35px" loading="lazy"></li>
+        </ul>
+        <ul class="marquee__list" aria-hidden="true">
+          <li><img src="assets/builders/lt.png" alt="" style="height:36px" loading="lazy"></li>
+          <li><img src="assets/builders/systra.png" alt="" style="height:26px" loading="lazy"></li>
+          <li><img src="assets/builders/crri.png" alt="" style="height:54px" loading="lazy"></li>
+          <li><img src="assets/builders/lam.png" alt="" style="height:34px" loading="lazy"></li>
+          <li><img src="assets/builders/jouleless.png" alt="" style="height:30px" loading="lazy"></li>
+          <li><img src="assets/builders/ninjacart.png" alt="" style="height:28px" loading="lazy"></li>
+          <li><img src="assets/builders/urbancompany.png" alt="" style="height:32px" loading="lazy"></li>
+          <li><img src="assets/builders/capillary.png" alt="" style="height:28px" loading="lazy"></li>
+          <li><img src="assets/builders/shaadi.png" alt="" style="height:35px" loading="lazy"></li>
+          <li><img src="assets/builders/venturecatalysts.png" alt="" style="height:24px" loading="lazy"></li>
+          <li><img src="assets/builders/bits.png" alt="" style="height:35px" loading="lazy"></li>
+        </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- WHAT IT DOES -->
+    <section class="block" id="vision">
+      <p class="label">Why Mason</p>
+      <h2>Move it once,<br>to where it’s needed.</h2>
+      <p class="lede vision__lede">On a construction site, materials can be unloaded, stored, staged and then delivered before anyone uses them. Every extra move costs time and labour.</p>
+      <div class="cols">
+        <article>
+          <span class="num">01</span>
+          <h3>Fewer moves</h3>
+          <p>Mason carries materials from storage straight to the work area, so there are fewer stops in between.</p>
+        </article>
+        <article>
+          <span class="num">02</span>
+          <h3>The hauls other equipment misses</h3>
+          <p>Forklifts, telehandlers and carts suit some jobs. Mason is for the short, repeated hauls where they’re a poor fit.</p>
+        </article>
+        <article>
+          <span class="num">03</span>
+          <h3>There when the crew is ready</h3>
+          <p>Materials staged early often get moved again. Mason brings them to the point of use when the crew needs them.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ON THE JOB: compact sample-run dashboard -->
+    <section class="block dash" id="on-the-job" aria-label="A sample Mason run">
+      <p class="label">On the job</p>
+      <h2>See a run.</h2>
+      <p class="lede dash__lede">Storage to the work area, loaded. A sample run with sample data, not a live feed.</p>
+
+      <div class="dash__panel" id="dash">
+        <header class="dash__top">
+          <span class="dash__unit"><i class="glyph" aria-hidden="true"></i>Unit 01</span>
+          <span class="dash__chips">
+            <span class="dchip dchip--rec"><i></i>Recording <em id="dTimer">00:00</em></span>
+            <span class="dchip">Sample run</span>
+          </span>
+          <span class="dash__clock" id="dClock">11:42:30</span>
+        </header>
+
+        <div class="dash__grid">
+          <article class="dcard dcol dcol--map">
+            <h3 class="dlabel">Site map</h3>
+            <div class="dmap"><canvas id="dMap" aria-label="Animated site map: Mason driving from Storage to the Work area"></canvas></div>
+          </article>
+
+          <div class="dcol dcol--mid">
+            <article class="dcard dcard--cam">
+              <h3 class="dlabel">Stereo camera</h3>
+              <div class="dcam">
+                <video id="dCam" muted loop playsinline preload="none" poster="assets/camera-poster.jpg" aria-label="Stereo camera view from Mason"></video>
+              </div>
+            </article>
+            <article class="dcard dcard--gauges">
+              <div class="dgauge">
+                <h3 class="dlabel">Speed</h3>
+                <p class="dbig"><span id="dSpeed">0.0</span><small>km/h</small></p>
+                <div class="dbar"><span id="dSpeedFill"></span></div>
+                <div class="dscale"><span>0</span><span>30</span></div>
+              </div>
+              <div class="dgauge">
+                <h3 class="dlabel">Load</h3>
+                <p class="dbig"><span id="dLoad">0</span><small>kg</small></p>
+                <div class="dbar dbar--amber"><span id="dLoadFill"></span></div>
+                <div class="dscale"><span>0</span><span>1,500</span></div>
+              </div>
+            </article>
+          </div>
+
+          <div class="dcol dcol--end">
+            <article class="dcard dcard--events">
+              <h3 class="dlabel">Events</h3>
+              <ul class="devents" id="dEvents"></ul>
+            </article>
+            <article class="dcard dcard--rough">
+              <div class="drow"><h3 class="dlabel">Ground roughness</h3><span class="dmini"><b id="dRough">0.00</b> g rms</span></div>
+              <canvas id="dSpark" aria-label="Ground roughness, last 60 seconds"></canvas>
+              <p class="dcap">Accelerometer, last 60 s</p>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section class="block block--contact" id="contact">
+      <div class="contact__head">
+        <p class="label">Contact sales</p>
+        <h2>Put Mason<br>on your site.</h2>
+        <p class="lede">We’re working with a small group of contractors first. Tell us about your sites and we’ll be in touch.</p>
+      </div>
+
+      <form class="form" id="contact-form" novalidate>
+        <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <div class="form__row">
+          <label class="field"><span>Name</span><input type="text" name="name" placeholder="Your name" autocomplete="name"></label>
+          <label class="field"><span>Work email</span><input type="email" name="email" placeholder="you@company.com" autocomplete="email" required></label>
+        </div>
+        <div class="form__row">
+          <label class="field"><span>Company</span><input type="text" name="company" placeholder="Company" autocomplete="organization"></label>
+          <label class="field"><span>I am a</span>
+            <select name="role">
+              <option value="">Select</option>
+              <option>General contractor</option>
+              <option>Subcontractor</option>
+              <option>Developer</option>
+              <option>Equipment / rental</option>
+              <option>Investor</option>
+              <option>Other</option>
+            </select>
+          </label>
+        </div>
+        <label class="field"><span>About your sites</span><textarea name="message" rows="2" placeholder="What are you building, and what are you moving?"></textarea></label>
+        <button class="btn-pill" type="submit">Contact sales <span class="btn-pill__arrow" aria-hidden="true"><svg viewBox="0 0 12 12" width="12" height="12" fill="none"><path d="M3 9 9 3M4.2 3H9v4.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+        <p class="form__msg" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <a class="brand" href="#top" aria-label="Mason"><span class="glyph" aria-hidden="true"></span><span>Mason</span></a>
+    <p>Currently in Entrepreneur First. Mason is a product in development.</p>
+    <p>© 2026 Mason</p>
+  </footer>
+
+  <script type="importmap">
+  { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  } }
+  </script>
+  <script src="main.js?v=4"></script>
+  <script src="dash.js?v=4" defer></script>
+  <script type="module" src="viewer.js?v=4"></script>
+  <script type="module" src="explode.js?v=4"></script>
+</body>
+</html>
